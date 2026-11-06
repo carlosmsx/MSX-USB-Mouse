@@ -1,0 +1,23 @@
+; LED WS2812B: 800 kHz, 10 ciclos de la SM por bit.
+;
+;   bit 0: 2 ciclos en 1, 8 en 0
+;   bit 1: 7 ciclos en 1, 3 en 0
+;
+; Pines:
+;   SIDE   GPIO16 (datos del LED)
+;
+; FIFO:
+;   TX     un color por palabra, GRB en los 24 bits altos (autopull de 24)
+
+.program led_ws2812
+.side_set 1
+
+.wrap_target
+bit:
+    out x, 1        side 0 [2]  ; 3 ciclos en 0 (final del bit anterior)
+    jmp !x cero     side 1 [1]  ; 2 ciclos en 1
+uno:
+    jmp bit         side 1 [4]  ; 5 ciclos mas en 1
+cero:
+    nop             side 0 [4]  ; 5 ciclos mas en 0
+.wrap

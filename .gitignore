@@ -1,0 +1,4 @@
+firmware/build/
+*.lst
+*.dsk
+__pycache__/

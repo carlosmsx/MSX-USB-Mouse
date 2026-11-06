@@ -1,0 +1,56 @@
+; Mouse MSX en el puerto de joystick.
+;
+; Cada flanco del pin 8 (strobe, en cualquier sentido) saca el nibble
+; siguiente en los pines 1-4: X alto, X bajo, Y alto, Y bajo. Si el pin 8 queda
+; quieto mas que el limite, la secuencia vuelve a empezar desde X alto.
+;
+; Pines:
+;   OUT    GPIO0-3 (datos). Se manejan con pindirs y la OE invertida por
+;          override (msx.c): bit en 1 -> pin suelto, el pull-up del MSX da 1;
+;          bit en 0 -> pin a GND. El valor de salida queda siempre en 0.
+;   IN     GPIO6 (strobe), para WAIT
+;   JMP    GPIO6 (strobe)
+;
+; FIFO:
+;   TX     una palabra por lectura: bits 3-0 X alto, 7-4 X bajo,
+;          11-8 Y alto, 15-12 Y bajo
+;   ISR    limite de espera entre flancos (lo carga msx.c al arrancar; no se
+;          usa para IN ni PUSH)
+;
+; En el primer flanco la SM levanta IRQ 0 y se queda en PULL: el nucleo 1 esta
+; esperando esa IRQ, arma la palabra con lo acumulado hasta ese momento y la
+; manda. Son unos cientos de ns; el MSX tarda microsegundos en leer.
+
+.program msx_mouse
+
+.wrap_target
+reposo:
+    jmp pin reposo_alto
+    wait 1 pin 0                ; pin 8 en 0: esperar que suba
+    jmp nueva
+reposo_alto:
+    wait 0 pin 0                ; pin 8 en 1: esperar que baje
+nueva:
+    irq set 0                   ; avisar al nucleo 1
+    pull block                  ; palabra con los 4 nibbles
+    out pindirs, 4              ; X alto
+    set y, 2                    ; quedan 3 nibbles
+
+espera:
+    mov x, isr                  ; limite de espera
+    jmp pin espera_alto
+espera_bajo:                    ; 2 ciclos por vuelta
+    jmp pin flanco
+    jmp x-- espera_bajo
+    jmp reposo                  ; tiempo agotado: secuencia nueva
+espera_alto:                    ; 3 ciclos por vuelta
+    jmp pin sigue_alto
+    jmp flanco
+sigue_alto:
+    jmp x-- espera_alto
+    jmp reposo
+
+flanco:
+    out pindirs, 4              ; X bajo, Y alto, Y bajo
+    jmp y-- espera
+.wrap                           ; Y bajo entregado: volver a reposo
